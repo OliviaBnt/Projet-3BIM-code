@@ -71,34 +71,34 @@ class ESM:
 		self.rhoW = rhoW
 
 		# Echo State Network dimensions 
-		self.N = reservoir_size
-		self.K = input_size
+		self.reservoir_size = reservoir_size
+		self.input_size = input_size
 		if self.bias:
-			self.K += 1
-		self.L = output_size
-		self.z_size = self.N
+			self.input_size += 1
+		self.output_size = output_size
+		self.z_size = self.reservoir_size
 		if self.input_to_output:
-			self.z_size += self.K
+			self.z_size += self.input_size
 		# States
-		self.u = np.ones(self.K)
-		self.x = np.zeros(self.N)
+		self.u = np.ones(self.input_size)
+		self.x = np.zeros(self.reservoir_size)
 		self.z = np.zeros(self.z_size)
-		self._pre_y = np.zeros(self.L)
-		self.y = np.zeros(self.L)
+		self._pre_y = np.zeros(self.output_size)
+		self.y = np.zeros(self.output_size)
 
 		# Weights
-		self.W = np.random.rand(self.N,self.N) - 0.5
+		self.W = np.random.rand(self.reservoir_size,self.reservoir_size) - 0.5
 		rhoW = np.max(np.abs(np.linalg.eig(self.W)[0]))
 		self.W *= self.rhoW / rhoW
-		self.W_in = np.random.rand(self.N,self.K) - 0.5
-		self.W_fb = np.random.rand(self.N,self.L) - 0.5
-		self.W_out = np.random.rand(self.L,self.z_size)*0.1
-		#self._W_out_gradient = np.random.randn(self.L,self.N + self.K)
+		self.W_in = np.random.rand(self.reservoir_size,self.input_size) - 0.5
+		self.W_fb = np.random.rand(self.reservoir_size,self.output_size) - 0.5
+		self.W_out = np.random.rand(self.output_size,self.z_size)*0.1
+		#self._W_out_gradient = np.random.randn(self.output_size,self.reservoir_size + self.input_size)
 		
 		# Activation functions
-		self.f = activation_function_reservoir
-		self.g = activation_function_output
-		self.g_ = derivative_activation_function_output
+		self.activation_function_reservoir = activation_function_reservoir
+		self.activation_function_output = activation_function_output
+		self.derivative_activation_function_output = derivative_activation_function_output
 		
 
 	def _update_reservoir(self, u = None, y_previous = None, y_target = None):
@@ -119,26 +119,26 @@ class ESM:
 		if y_previous is not None:
 			self.y[:] = y_previous[:]
 
-		delta_x = self.time_constant * self.f( self.W_in.dot(self.u) + self.W.dot(self.x) + self.W_fb.dot(self.y) + np.random.randn(*self.y.shape)*self.noise_strength)
+		delta_x = self.time_constant * self.activation_function_reservoir( self.W_in.dot(self.u) + self.W.dot(self.x) + self.W_fb.dot(self.y) + np.random.randn(*self.y.shape)*self.noise_strength)
 		self.x *= (1.-self.leaking_rate*self.time_constant)
 		self.x += delta_x
 		if self.input_to_output:
-			self.z[:self.K] = self.u[:]
-			self.z[self.K:] = self.x[:]
+			self.z[:self.input_size] = self.u[:]
+			self.z[self.input_size:] = self.x[:]
 		else:
 			self.z[:] = self.x[:]
 		print(self.z.shape)
 		print(self.W_out.shape)
 		print 
 		self._pre_y = self.W_out.dot(self.z)
-		self.y = self.g(self._pre_y)	
+		self.y = self.activation_function_output(self._pre_y)	
 
 	def _compute_gradient(self, y_target):
 		"""
 		:param y_target: output answer vector
 		:type y_target: array
 		"""		
-		row_term = (self.y - y_target) * self.g_(self.y)
+		row_term = (self.y - y_target) * self.derivative_activation_function_output(self.y)
 		return np.dot( row_term.reshape(row_term.size,1), self.z.reshape(1,self.z.size)) 
 
 	def _stochastic_gradient_decent(self, y_ans):
